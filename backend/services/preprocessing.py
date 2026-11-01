@@ -51,11 +51,11 @@ def build_features(energy: pd.DataFrame) -> pd.DataFrame:
     """
     df = energy.copy()
 
-    # 1. Weather: 加载并加入天气预报扰动
+    # 1. Weather: Load and incorporate weather forecast perturbations
     if not set(WEATHER_FEATURES).issubset(df.columns):
         df = df.merge(load_weather_hourly(), on="time", how="left")
 
-    # 模拟真实 NWP 天气预报误差，避免完美天气泄露
+    # Simulate realistic NWP weather forecast errors to prevent "perfect weather" leakage.
     np.random.seed(42)
     if "temp" in df.columns:
         df["temp"] = df["temp"] + np.random.normal(0, 1.5, size=len(df))
@@ -82,11 +82,11 @@ def build_features(energy: pd.DataFrame) -> pd.DataFrame:
     df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
     df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
 
-    # 5. Lag features (日前规则：最小 lag 为 24)
+    # 5. Lag features (Current rule: minimum lag is 24)
     for lag in (24, 48, 168):
         df[f"load_lag_{lag}"] = df["target_filled"].shift(lag)
 
-    # 6. Rolling features: 严格将滑动起点平移 48h，彻底隔绝日前 24 小时内的未来信息
+    # 6. Rolling features: Shift the sliding window start point by exactly 48 hours to completely exclude any future information from the 24-hour period preceding the target day.
     df["load_roll_mean_24"] = df["target_filled"].shift(48).rolling(24).mean()
     df["load_roll_std_24"] = df["target_filled"].shift(48).rolling(24).std()
     df["load_roll_mean_168"] = df["target_filled"].shift(48).rolling(168).mean()
