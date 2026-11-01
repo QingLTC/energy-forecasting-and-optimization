@@ -1,6 +1,6 @@
 # ALICE Track A - Energy Forecasting & Optimization Platform
 
-> **Team Lim** | Developed by **Lim Tze Chin** (Individual Project - Completed all parts)
+> **Team Lim** | Developed by **Lim Tze Chin** (Individual Project) - ESILV x ALICE ML Workshop
 
 An end-to-end energy analytics and battery storage dispatch system for ALICE Track A. The project integrates hourly load forecasting, model explainability (XAI), and battery cost-optimization into a decoupled full-stack application (FastAPI + Streamlit).
 
