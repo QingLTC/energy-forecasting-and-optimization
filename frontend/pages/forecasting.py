@@ -109,7 +109,7 @@ def _interpretation(metrics: dict):
   if model is not None and ref is not None:
     if ref < model:
       lines.append(
-          "The provided reference forecast is still ahead (MAE {ref:,.0f} vs"
+          f"The provided reference forecast is still ahead (MAE {ref:,.0f} vs"
           f" {model:,.0f} MW). That is expected: it is a professional"
           " day-ahead system. We report the gap honestly."
       )

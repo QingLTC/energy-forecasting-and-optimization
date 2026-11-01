@@ -45,34 +45,36 @@ def read_energy_csv(raw_bytes: bytes) -> pd.DataFrame:
 
 def build_features(energy: pd.DataFrame) -> pd.DataFrame:
     """
-    Reproduce the notebook-04 feature pipeline on an uploaded energy slice.
-
-    Returns a frame with: time, the original target and reference (if present),
-    a `target_missing` flag, and the 19 model features. Warm-up rows that lack
-    enough history keep NaN features and are dropped later by the forecaster.
+    Feature pipeline with strict day-ahead production constraints:
+    1. Weather forecasts simulated via realistic perturbation.
+    2. Rolling features shifted by 48h to prevent intra-day forecast leakage.
     """
     df = energy.copy()
 
-    # 1. Weather: merge the bundled hourly aggregate unless the upload already
-    # carries the weather columns. Then clip the physically-bounded variables.
+    # 1. Weather: 加载并加入天气预报扰动
     if not set(WEATHER_FEATURES).issubset(df.columns):
         df = df.merge(load_weather_hourly(), on="time", how="left")
+
+    # 模拟真实 NWP 天气预报误差，避免完美天气泄露
+    np.random.seed(42)
+    if "temp" in df.columns:
+        df["temp"] = df["temp"] + np.random.normal(0, 1.5, size=len(df))
+    if "wind_speed" in df.columns:
+        df["wind_speed"] = (df["wind_speed"] + np.random.normal(0, 1.0, size=len(df))).clip(*WIND_BOUNDS)
     if "pressure" in df.columns:
         df["pressure"] = df["pressure"].clip(*PRESSURE_BOUNDS)
-    df["wind_speed"] = df["wind_speed"].clip(*WIND_BOUNDS)
 
-    # 2. Target handling: keep the original (with its gaps flagged) and build an
-    # interpolated copy used ONLY to compute lags/rolling, never scored.
+    # 2. Target handling
     df["target_missing"] = df[TARGET].isna()
     df["target_filled"] = df.set_index("time")[TARGET].interpolate("time").values
 
-    # 3. Calendar features.
+    # 3. Calendar features
     df["hour"] = df["time"].dt.hour
-    df["day_of_week"] = df["time"].dt.dayofweek          # 0 = Monday
+    df["day_of_week"] = df["time"].dt.dayofweek
     df["month"] = df["time"].dt.month
     df["is_weekend"] = (df["day_of_week"] >= 5).astype(int)
 
-    # 4. Cyclic encodings (hours/days/months live on a circle).
+    # 4. Cyclic encodings
     df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
     df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
     df["dow_sin"] = np.sin(2 * np.pi * df["day_of_week"] / 7)
@@ -80,15 +82,14 @@ def build_features(energy: pd.DataFrame) -> pd.DataFrame:
     df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
     df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
 
-    # 5. Lag features on the filled target. Day-ahead rule: smallest lag is 24.
+    # 5. Lag features (日前规则：最小 lag 为 24)
     for lag in (24, 48, 168):
         df[f"load_lag_{lag}"] = df["target_filled"].shift(lag)
 
-    # 6. Rolling features. Shift by 24 FIRST so the window ends 24 h before the
-    # target hour and never uses information we would not have at forecast time.
-    df["load_roll_mean_24"] = df["target_filled"].shift(24).rolling(24).mean()
-    df["load_roll_std_24"] = df["target_filled"].shift(24).rolling(24).std()
-    df["load_roll_mean_168"] = df["target_filled"].shift(24).rolling(168).mean()
+    # 6. Rolling features: 严格将滑动起点平移 48h，彻底隔绝日前 24 小时内的未来信息
+    df["load_roll_mean_24"] = df["target_filled"].shift(48).rolling(24).mean()
+    df["load_roll_std_24"] = df["target_filled"].shift(48).rolling(24).std()
+    df["load_roll_mean_168"] = df["target_filled"].shift(48).rolling(168).mean()
 
     keep = ["time", "target_missing"]
     if TARGET in df.columns:
@@ -96,7 +97,6 @@ def build_features(energy: pd.DataFrame) -> pd.DataFrame:
     if REFERENCE in df.columns:
         keep.append(REFERENCE)
     return df[keep + FEATURES]
-
 
 def split_ready_rows(feat: pd.DataFrame):
     """

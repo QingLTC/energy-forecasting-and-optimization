@@ -53,8 +53,8 @@ def render_sidebar():
     # ---- forecast controls
     st.sidebar.subheader("Forecast")
     st.sidebar.caption(
-        "The workshop dashboard always requests one 24-hour day-ahead window. "
-        "In the demo CSV, the backend displays the most recent scorable 24-hour window."
+        "The forecasting engine evaluates a 24-hour day-ahead dispatch window. "
+        "For the demo dataset, the system scores the most recent 24-hour period."
     )
 
     # ---- run
@@ -73,4 +73,5 @@ def render_sidebar():
     if ok and "uploaded_bytes" not in st.session_state:
         st.sidebar.caption("Upload a CSV to enable the forecast button.")
 
-    st.sidebar.caption("The dashboard runs no model itself. Every number comes from the backend.")
+    st.sidebar.caption("The dashboard runs no model itself."
+    "All inference and feature pipelines are decoupled and served via the FastAPI backend.")
